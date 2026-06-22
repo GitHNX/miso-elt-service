@@ -5,6 +5,9 @@ Security model
 ──────────────
 - Connects to PostgreSQL as `miso_readonly` (SELECT-only role)
 - API key authentication via Bearer token (injected from Secrets Manager)
+- Rate limiting via slowapi (60 req/min per IP on data endpoints)
+- Max date-range window on history queries (31 days) to prevent expensive scans
+- Security headers on every response (X-Content-Type-Options, X-Frame-Options, etc.)
 - Never exposes DB credentials or internal stack traces to callers
 - Deployed behind an ALB; the ALB health-check endpoint (/health) is
   unauthenticated so the ALB target group can probe it
@@ -18,13 +21,17 @@ GET /api/v1/fuel-mix/summary    — aggregated stats per fuel type
 GET /api/v1/ingestion/status    — last N ingestion runs (operational view)
 """
 import secrets
-from datetime import datetime, timezone
-from typing import Annotated, Generator, Optional
+from datetime import datetime, timedelta, timezone
+from typing import Annotated, Any, Callable, Coroutine, Generator, Optional
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Security, status
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Security, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -37,17 +44,23 @@ configure_logging()
 logger = get_logger(__name__)
 settings = get_settings()
 
+# ── Rate limiter ──────────────────────────────────────────────────────────────
+
+limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
+
 # ── FastAPI app ───────────────────────────────────────────────────────────────
 
 app = FastAPI(
     title="MISO Fuel Mix API",
     description="Read-only access to MISO real-time fuel mix data",
     version="1.0.0",
-    # Disable automatic /docs in production to reduce attack surface
     docs_url="/docs" if settings.environment != "production" else None,
     redoc_url=None,
     openapi_url="/openapi.json" if settings.environment != "production" else None,
 )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 
 app.add_middleware(
     CORSMiddleware,
@@ -55,6 +68,21 @@ app.add_middleware(
     allow_methods=["GET"],
     allow_headers=["Authorization"],
 )
+
+# ── Security headers middleware ───────────────────────────────────────────────
+
+@app.middleware("http")
+async def add_security_headers(
+    request: Request,
+    call_next: Callable[[Request], Coroutine[Any, Any, JSONResponse]],
+) -> JSONResponse:
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
@@ -86,6 +114,9 @@ def get_db() -> Generator[Session, None, None]:
 
 DbDep = Annotated[Session, Depends(get_db)]
 AuthDep = Annotated[None, Depends(require_api_key)]
+
+# Max date range for history queries — prevents full-table scans
+_MAX_HISTORY_DAYS = 31
 
 
 # ── Response schemas ──────────────────────────────────────────────────────────
@@ -161,9 +192,9 @@ def health() -> HealthResponse:
     response_model=FuelMixSnapshot,
     tags=["Fuel Mix"],
 )
-def get_latest(db: DbDep, _: AuthDep) -> FuelMixSnapshot:
+@limiter.limit("60/minute")
+def get_latest(request: Request, db: DbDep, _: AuthDep) -> FuelMixSnapshot:
     """Return the most recent fuel-mix snapshot across all fuel types."""
-    # Find the latest interval
     latest_interval = db.query(func.max(FactFuelMix.interval_est_utc)).scalar()
     if not latest_interval:
         raise HTTPException(status_code=404, detail="No data available yet")
@@ -198,7 +229,9 @@ def get_latest(db: DbDep, _: AuthDep) -> FuelMixSnapshot:
     response_model=HistoryResponse,
     tags=["Fuel Mix"],
 )
+@limiter.limit("30/minute")
 def get_history(
+    request: Request,
     db: DbDep,
     _: AuthDep,
     from_utc: Optional[datetime] = Query(None, description="Start of time range (UTC)"),
@@ -207,7 +240,20 @@ def get_history(
     page: int = Query(1, ge=1),
     page_size: int = Query(100, ge=1, le=1000),
 ) -> HistoryResponse:
-    """Paginated fuel-mix history with optional time-range and category filters."""
+    """Paginated fuel-mix history with optional time-range and category filters.
+    Maximum query window is 31 days.
+    """
+    # Enforce max date range to prevent expensive full-table scans
+    if from_utc and to_utc:
+        if (to_utc - from_utc) > timedelta(days=_MAX_HISTORY_DAYS):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Date range cannot exceed {_MAX_HISTORY_DAYS} days.",
+            )
+    # If only from_utc provided, cap the range automatically
+    if from_utc and not to_utc:
+        to_utc = from_utc + timedelta(days=_MAX_HISTORY_DAYS)
+
     q = (
         db.query(FactFuelMix, DimFuelCategory)
         .join(DimFuelCategory, FactFuelMix.fuel_category_id == DimFuelCategory.id)
@@ -248,13 +294,22 @@ def get_history(
     response_model=list[FuelSummary],
     tags=["Fuel Mix"],
 )
+@limiter.limit("60/minute")
 def get_summary(
+    request: Request,
     db: DbDep,
     _: AuthDep,
     from_utc: Optional[datetime] = Query(None),
     to_utc: Optional[datetime] = Query(None),
 ) -> list[FuelSummary]:
     """Aggregate stats (avg / min / max MW) per fuel category over a time range."""
+    if from_utc and to_utc:
+        if (to_utc - from_utc) > timedelta(days=_MAX_HISTORY_DAYS):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Date range cannot exceed {_MAX_HISTORY_DAYS} days.",
+            )
+
     q = db.query(
         DimFuelCategory.category_name,
         DimFuelCategory.is_renewable,
@@ -288,7 +343,9 @@ def get_summary(
     response_model=list[IngestionRunRow],
     tags=["Ops"],
 )
+@limiter.limit("60/minute")
 def get_ingestion_status(
+    request: Request,
     db: DbDep,
     _: AuthDep,
     limit: int = Query(20, ge=1, le=200),

@@ -103,8 +103,12 @@ MISO reports all timestamps as EST (UTC-5, fixed offset — not EDT). We always 
 | DB credentials | Stored in Secrets Manager. Injected as env vars at ECS task start. Never in code or Terraform state. |
 | DB roles | Ingestion worker connects as `miso_app` (INSERT/UPDATE). API connects as `miso_readonly` (SELECT only, enforced at the Postgres level). |
 | API auth | Bearer token (48-char random, stored in Secrets Manager). Compared with `secrets.compare_digest` to prevent timing attacks. |
+| Rate limiting | 60 req/min per IP on all endpoints; 30 req/min on `/history` (via slowapi). Returns 429 on breach. |
+| Query abuse | History and summary endpoints reject date ranges exceeding 31 days — prevents full-table scans. |
+| Security headers | Every response includes `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `X-XSS-Protection`, `Referrer-Policy`, and `Cache-Control: no-store`. |
 | Error responses | FastAPI's default 500 handler returns `{"detail": "Internal Server Error"}` — no stack traces or DB error strings are exposed. |
 | Docs | `/docs` and `/openapi.json` are disabled in `production` environment. |
+| Dependency scanning | CI runs `pip-audit` on every push to catch known CVEs in dependencies. |
 
 ---
 

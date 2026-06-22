@@ -19,7 +19,7 @@ os.environ.setdefault("DB_READONLY_PASSWORD", "x")
 os.environ.setdefault("ENVIRONMENT", "development")
 
 from src.api.app import app, get_db
-from src.models.orm import DimFuelCategory, FactFuelMix, IngestionRun
+from src.models.orm import DimFuelCategory, FactFuelMix
 
 AUTH = {"Authorization": "Bearer test-api-key"}
 BAD_AUTH = {"Authorization": "Bearer wrong-key"}

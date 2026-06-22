@@ -5,9 +5,9 @@ No network calls — tests the parsing logic in isolation.
 """
 import pytest
 from datetime import datetime, timezone, timedelta
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-from src.ingestion.miso_client import MISOClient, MISOClientError, FuelMixSnapshot
+from src.ingestion.miso_client import MISOClient, MISOClientError
 
 EST = timezone(timedelta(hours=-5))
 

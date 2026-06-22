@@ -24,8 +24,6 @@ Design notes
 - act_mw can be negative (Battery Storage charging, Solar at night are
   returned as -1 / negative values by MISO).
 """
-from datetime import datetime
-
 from sqlalchemy import (
     BigInteger,
     Boolean,

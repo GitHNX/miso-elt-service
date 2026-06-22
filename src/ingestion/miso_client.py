@@ -8,11 +8,9 @@ Responsibilities
 - Enforce ≤1 call/minute via a module-level cooldown tracker.
 - Retry transient HTTP/network errors with exponential back-off.
 """
-import re
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
-from typing import Optional
 
 import httpx
 from tenacity import (

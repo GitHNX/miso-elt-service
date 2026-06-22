@@ -10,7 +10,7 @@ The integration tests (tests/integration/) test against real Postgres.
 """
 import pytest
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 from src.ingestion.miso_client import FuelMixSnapshot, FuelTypeReading, MISOClientError
 from src.ingestion.service import IngestionService

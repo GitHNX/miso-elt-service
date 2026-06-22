@@ -1,0 +1,83 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: miso_elt
+      POSTGRES_USER: miso_app
+      POSTGRES_PASSWORD: localdevpassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/00_init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U miso_app -d miso_elt"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  migrate:
+    build: .
+    command: ["python", "-m", "alembic", "upgrade", "head"]
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: miso_elt
+      DB_USER: miso_app
+      DB_PASSWORD: localdevpassword
+      DB_READONLY_USER: miso_readonly_user
+      DB_READONLY_PASSWORD: localdevpassword
+      ENVIRONMENT: development
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  worker:
+    build: .
+    command: ["python", "-m", "src.ingestion.worker", "--once"]
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: miso_elt
+      DB_USER: miso_app
+      DB_PASSWORD: localdevpassword
+      DB_READONLY_USER: miso_readonly_user
+      DB_READONLY_PASSWORD: localdevpassword
+      ENVIRONMENT: development
+      LOG_LEVEL: DEBUG
+      SNS_ALERT_TOPIC_ARN: ""
+      AWS_EC2_METADATA_DISABLED: "true"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: miso_elt
+      DB_USER: miso_app
+      DB_PASSWORD: localdevpassword
+      DB_READONLY_USER: miso_readonly_user
+      DB_READONLY_PASSWORD: localdevpassword
+      API_KEY: dev-api-key-change-in-production
+      ENVIRONMENT: development
+      LOG_LEVEL: DEBUG
+      SNS_ALERT_TOPIC_ARN: ""
+      AWS_EC2_METADATA_DISABLED: "true"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  pg_data:

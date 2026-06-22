@@ -1,0 +1,14 @@
+# terraform/environments/prod/terraform.tfvars
+# Copy to terraform/ and rename to terraform.tfvars before applying.
+# Never commit real values — use TF_VAR_* env vars in CI.
+
+aws_region         = "us-east-1"
+environment        = "production"
+vpc_cidr           = "10.0.0.0/16"
+db_name            = "miso_elt"
+db_username        = "miso_app"
+rds_instance_class = "db.t4g.micro"
+alert_email        = "ops-team@example.com"
+
+# Set by CI pipeline after docker build + push:
+# ecr_image_uri = "123456789012.dkr.ecr.us-east-1.amazonaws.com/miso-elt-production-app:abc1234"

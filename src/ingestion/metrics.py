@@ -57,7 +57,7 @@ class MetricsPublisher:
             {"MetricName": "MISOAPILatencyMs", "Value": latency_ms, "Unit": "Milliseconds"},
         ])
 
-    def _put_metrics(self, metric_data: list[dict]) -> None:
+    def _put_metrics(self, metric_data: list[dict[str, object]]) -> None:
         if not self._cw:
             logger.debug("cloudwatch_disabled_skipping_metrics", count=len(metric_data))
             return

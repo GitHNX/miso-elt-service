@@ -63,10 +63,10 @@ class MISOClient:
     def close(self) -> None:
         self._http.close()
 
-    def __enter__(self):
+    def __enter__(self) -> "MISOClient":
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: object) -> None:
         self.close()
 
     def fetch(self) -> FuelMixSnapshot:
@@ -118,12 +118,12 @@ class MISOClient:
         return snapshot
 
     @staticmethod
-    def _parse(raw: dict) -> FuelMixSnapshot:
+    def _parse(raw: dict[str, object]) -> FuelMixSnapshot:
         """Parse raw API JSON into a typed snapshot."""
         try:
-            ref_id: str = raw["RefId"]
-            total_mw = float(raw["TotalMW"])
-            fuel_types: list[dict] = raw["Fuel"]["Type"]
+            ref_id: str = raw["RefId"]  # type: ignore[assignment]
+            total_mw = float(raw["TotalMW"])  # type: ignore[arg-type]
+            fuel_types: list[dict[str, str]] = raw["Fuel"]["Type"]  # type: ignore[index]
 
             # Parse interval from first fuel-type record
             # Format: "2026-06-21 2:10:00 AM"

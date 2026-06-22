@@ -8,9 +8,10 @@ Two engines:
 This guarantees the API can never mutate data even if application code tries.
 """
 from contextlib import contextmanager
-from typing import Generator
+from typing import Any, Generator, Tuple
 
 from sqlalchemy import create_engine, event, text
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from src.core.config import get_settings
@@ -19,7 +20,7 @@ from src.core.logging import get_logger
 logger = get_logger(__name__)
 
 
-def _make_engine(url: str, pool_size: int = 5):
+def _make_engine(url: str, pool_size: int = 5) -> Engine:
     engine = create_engine(
         url,
         pool_size=pool_size,
@@ -30,7 +31,7 @@ def _make_engine(url: str, pool_size: int = 5):
     )
 
     @event.listens_for(engine, "connect")
-    def set_search_path(dbapi_conn, conn_record):
+    def set_search_path(dbapi_conn: Any, conn_record: Any) -> None:
         cursor = dbapi_conn.cursor()
         cursor.execute("SET search_path TO miso, public")
         cursor.close()
@@ -38,7 +39,7 @@ def _make_engine(url: str, pool_size: int = 5):
     return engine
 
 
-def _build_engines():
+def _build_engines() -> Tuple[Engine, Engine]:
     settings = get_settings()
     app = _make_engine(settings.app_db_url, pool_size=5)
     readonly = _make_engine(settings.readonly_db_url, pool_size=10)

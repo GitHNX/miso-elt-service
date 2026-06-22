@@ -28,7 +28,7 @@ logger = get_logger(__name__)
 _shutdown = False
 
 
-def _handle_sigterm(sig, frame):
+def _handle_sigterm(sig: int, frame: object) -> None:
     global _shutdown
     logger.info("shutdown_signal_received")
     _shutdown = True

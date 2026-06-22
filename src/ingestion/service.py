@@ -44,11 +44,11 @@ class IngestionService:
             snapshot = self._client.fetch()
             rows_upserted = self._load(snapshot, run_record)
 
-            run_record.status = "success"
-            run_record.rows_upserted = rows_upserted
-            run_record.finished_at = datetime.now(timezone.utc)
-            run_record.interval_est_utc = snapshot.interval_utc
-            run_record.raw_ref_id = snapshot.ref_id
+            run_record.status = "success"  # type: ignore[assignment]
+            run_record.rows_upserted = rows_upserted  # type: ignore[assignment]
+            run_record.finished_at = datetime.now(timezone.utc)  # type: ignore[assignment]
+            run_record.interval_est_utc = snapshot.interval_utc  # type: ignore[assignment]
+            run_record.raw_ref_id = snapshot.ref_id  # type: ignore[assignment]
 
             self._metrics.record_ingestion_success(rows_upserted, snapshot.interval_utc)
             logger.info(
@@ -59,15 +59,15 @@ class IngestionService:
             )
 
         except MISOClientError as exc:
-            run_record.error_message = str(exc)
-            run_record.finished_at = datetime.now(timezone.utc)
+            run_record.error_message = str(exc)  # type: ignore[assignment]
+            run_record.finished_at = datetime.now(timezone.utc)  # type: ignore[assignment]
             self._metrics.record_ingestion_failure(str(exc))
             logger.error("ingestion_failed_miso_error", error=str(exc))
             raise
 
         except Exception as exc:
-            run_record.error_message = str(exc)
-            run_record.finished_at = datetime.now(timezone.utc)
+            run_record.error_message = str(exc)  # type: ignore[assignment]
+            run_record.finished_at = datetime.now(timezone.utc)  # type: ignore[assignment]
             self._metrics.record_ingestion_failure(str(exc))
             logger.error("ingestion_failed_unexpected", error=str(exc), exc_info=True)
             raise

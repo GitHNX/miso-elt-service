@@ -19,7 +19,7 @@ GET /api/v1/ingestion/status    — last N ingestion runs (operational view)
 """
 import secrets
 from datetime import datetime, timezone
-from typing import Annotated, Optional
+from typing import Annotated, Generator, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Security, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -76,7 +76,7 @@ def require_api_key(
 
 # ── DB dependency ─────────────────────────────────────────────────────────────
 
-def get_db():
+def get_db() -> Generator[Session, None, None]:
     session = ReadonlySession()
     try:
         yield session
@@ -146,7 +146,7 @@ class HealthResponse(BaseModel):
 # ── Routes ────────────────────────────────────────────────────────────────────
 
 @app.get("/health", response_model=HealthResponse, tags=["Ops"])
-def health():
+def health() -> HealthResponse:
     """ALB / ECS health check — no authentication required."""
     db_ok = check_db_connectivity()
     return HealthResponse(
@@ -161,7 +161,7 @@ def health():
     response_model=FuelMixSnapshot,
     tags=["Fuel Mix"],
 )
-def get_latest(db: DbDep, _: AuthDep):
+def get_latest(db: DbDep, _: AuthDep) -> FuelMixSnapshot:
     """Return the most recent fuel-mix snapshot across all fuel types."""
     # Find the latest interval
     latest_interval = db.query(func.max(FactFuelMix.interval_est_utc)).scalar()
@@ -206,7 +206,7 @@ def get_history(
     category: Optional[str] = Query(None, description="Filter by fuel category name"),
     page: int = Query(1, ge=1),
     page_size: int = Query(100, ge=1, le=1000),
-):
+) -> HistoryResponse:
     """Paginated fuel-mix history with optional time-range and category filters."""
     q = (
         db.query(FactFuelMix, DimFuelCategory)
@@ -253,7 +253,7 @@ def get_summary(
     _: AuthDep,
     from_utc: Optional[datetime] = Query(None),
     to_utc: Optional[datetime] = Query(None),
-):
+) -> list[FuelSummary]:
     """Aggregate stats (avg / min / max MW) per fuel category over a time range."""
     q = db.query(
         DimFuelCategory.category_name,
@@ -292,7 +292,7 @@ def get_ingestion_status(
     db: DbDep,
     _: AuthDep,
     limit: int = Query(20, ge=1, le=200),
-):
+) -> list[IngestionRunRow]:
     """Return the last N ingestion run records (for operational dashboards)."""
     runs = (
         db.query(IngestionRun)
@@ -302,13 +302,13 @@ def get_ingestion_status(
     )
     return [
         IngestionRunRow(
-            id=r.id,
-            started_at=r.started_at,
-            finished_at=r.finished_at,
-            status=r.status,
-            rows_upserted=r.rows_upserted,
-            error_message=r.error_message,
-            interval_est_utc=r.interval_est_utc,
+            id=r.id,  # type: ignore[arg-type]
+            started_at=r.started_at,  # type: ignore[arg-type]
+            finished_at=r.finished_at,  # type: ignore[arg-type]
+            status=r.status,  # type: ignore[arg-type]
+            rows_upserted=r.rows_upserted,  # type: ignore[arg-type]
+            error_message=r.error_message,  # type: ignore[arg-type]
+            interval_est_utc=r.interval_est_utc,  # type: ignore[arg-type]
         )
         for r in runs
     ]

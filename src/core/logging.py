@@ -23,13 +23,13 @@ def configure_logging() -> None:
 
     if settings.environment == "production":
         # JSON for CloudWatch
-        renderer = structlog.processors.JSONRenderer()
+        renderer: structlog.types.Processor = structlog.processors.JSONRenderer()
     else:
         # Human-friendly for local dev
-        renderer = structlog.dev.ConsoleRenderer()
+        renderer = structlog.dev.ConsoleRenderer()  # type: ignore[assignment,unused-ignore]
 
     structlog.configure(
-        processors=shared_processors + [
+        processors=shared_processors + [  # type: ignore[arg-type]
             structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
         ],
         wrapper_class=structlog.stdlib.BoundLogger,
@@ -43,7 +43,7 @@ def configure_logging() -> None:
             structlog.stdlib.ProcessorFormatter.remove_processors_meta,
             renderer,
         ],
-        foreign_pre_chain=shared_processors,
+        foreign_pre_chain=shared_processors,  # type: ignore[arg-type]
     )
 
     handler = logging.StreamHandler(sys.stdout)
@@ -59,4 +59,4 @@ def configure_logging() -> None:
 
 
 def get_logger(name: str) -> structlog.stdlib.BoundLogger:
-    return structlog.get_logger(name)
+    return structlog.get_logger(name)  # type: ignore[no-any-return]

@@ -119,7 +119,7 @@ class FactFuelMix(Base):
 
     fuel_category = relationship("DimFuelCategory", back_populates="readings")
 
-    __table_args__ = (
+    __table_args__ = (  # type: ignore[assignment]
         UniqueConstraint(
             "interval_est_utc",
             "fuel_category_id",
@@ -158,7 +158,7 @@ class IngestionRun(Base):
     interval_est_utc = Column(DateTime(timezone=True), nullable=True)
     raw_ref_id = Column(Text, nullable=True)
 
-    __table_args__ = (
+    __table_args__ = (  # type: ignore[assignment]
         CheckConstraint("status IN ('success', 'failure', 'skipped')", name="ck_ingestion_run_status"),
         Index("ix_ingestion_run_started", "started_at"),
         {"schema": "miso"},

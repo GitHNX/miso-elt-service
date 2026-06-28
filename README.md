@@ -147,15 +147,24 @@ MISO reports all timestamps as EST (UTC-5, fixed offset — not EDT). We always 
 ### Start everything locally
 
 ```bash
+# First time — build the images (--no-cache ensures a clean build)
+docker-compose build --no-cache
+
 # Bring up Postgres, run migrations, run one ingestion, start API
 docker-compose up
 
-# One-shot ingestion only
+# Or build and start in one command (use --no-cache only if you suspect stale layers)
+docker-compose up --build
+```
+
+```bash
+# One-shot ingestion only (after stack is running)
 docker-compose run --rm worker
 
 # API only (after postgres + migrate have run)
 docker-compose up api
 ```
+The rule of thumb is: `--no-cache` once on first clone or when something is mysteriously broken, plain `--build` for normal code changes.
 
 API will be available at `http://localhost:8000`.
 

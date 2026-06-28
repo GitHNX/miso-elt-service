@@ -170,6 +170,8 @@ API will be available at `http://localhost:8000`.
 
 > **Note:** The examples below use `python -m json.tool` for pretty-printing, which requires no extra installation. If you have `jq` installed you can substitute `| jq .` instead.
 
+> **Note:** `python3` works on `Linux`, `macOS`, and `Windows` (via Python Launcher). `python` alone is only reliable on Windows where the installer sets it up that way.
+
 ```bash
 # Health check (no auth)
 curl http://localhost:8000/health
